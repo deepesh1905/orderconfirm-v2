@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrderConfirm SaaS - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #1a1e27; color: #fff; }
+        .card { background-color: #242b3d; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .sidebar { background-color: #1f2533; height: 100vh; }
+    </style>
+</head>
+<body class="flex">
+
+    <div class="sidebar w-64 p-6 hidden md:block">
+        <h2 class="text-2xl font-bold text-green-400 mb-10">OrderConfirm</h2>
+        <ul class="space-y-4 text-gray-300">
+            <li class="font-bold text-white bg-gray-700 p-2 rounded">📊 Dashboard</li>
+            <li class="p-2 hover:bg-gray-700 rounded cursor-pointer">💳 Wallet</li>
+            <li class="p-2 hover:bg-gray-700 rounded cursor-pointer">🔌 API Setup</li>
+        </ul>
+    </div>
+
+    <div class="flex-1 p-8 overflow-y-auto h-screen">
+        <div class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-3xl font-bold">Aapka Dashboard</h1>
+                <p class="text-gray-400">Aaj ke orders aur confirmations ka live overview</p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span class="text-green-400 font-bold" id="userNameDisplay">Namaste, Boss! 🚀</span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="card"><h3 class="text-gray-400 mb-2">📄 Total Orders</h3><p class="text-3xl font-bold" id="totOrders">0</p></div>
+            <div class="card border-t-4 border-green-500"><h3 class="text-gray-400 mb-2">🟩 Confirmed</h3><p class="text-3xl font-bold" id="confOrders">0</p></div>
+            <div class="card border-t-4 border-red-500"><h3 class="text-gray-400 mb-2">🟥 Rejected</h3><p class="text-3xl font-bold" id="rejOrders">0</p></div>
+            <div class="card border-t-4 border-yellow-500"><h3 class="text-gray-400 mb-2">⏳ Pending</h3><p class="text-3xl font-bold" id="pendOrders">0</p></div>
+        </div>
+
+        <div class="card mb-8">
+            <h3 class="text-gray-400 mb-2 font-bold">💰 Wallet Balance</h3>
+            <h2 class="text-4xl font-bold mb-4">₹ <span id="walletBal">0</span> <span class="text-sm text-gray-400 font-normal">remaining</span></h2>
+            
+            <button id="rechargeBtn" class="w-full bg-green-400 hover:bg-green-500 text-black font-bold py-4 rounded-lg mt-2 transition text-lg shadow-lg">
+                + Wallet Recharge Karo (₹500)
+            </button>
+        </div>
+    </div>
+
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script>
+        async function fetchDashboardData() {
+            try {
+                // Ab ye seedha God Mode backend se data layega bina token ruke!
+                const res = await fetch('http://localhost:3000/api/dashboard');
+                const data = await res.json();
+
+                if (data.success && data.user) {
+                    const u = data.user;
+                    document.getElementById('userNameDisplay').innerText = `Namaste, ${u.username}!`;
+                    document.getElementById('totOrders').innerText = u.totalOrders;
+                    document.getElementById('walletBal').innerText = u.walletBalance;
+                }
+            } catch(e) {}
+        }
+        
+        // Page khulte hi data load karo
+        fetchDashboardData();
+
+        document.getElementById('rechargeBtn').onclick = async function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('rechargeBtn');
+            btn.innerText = "Processing Please Wait... ⏳";
+
+            try {
+                const response = await fetch('http://localhost:3000/api/create-recharge', { method: 'POST' });
+                const data = await response.json();
+
+                if(data.success) {
+                    var options = {
+                        "key": data.key_id, 
+                        "amount": "50000", 
+                        "currency": "INR",
+                        "name": "OrderConfirm SaaS",
+                        "description": "Premium Wallet Recharge",
+                        "image": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
+                        "order_id": data.order_id, 
+                        
+                        "handler": async function (response){
+                            const token = localStorage.getItem('token');
+                            const res = await fetch('http://localhost:3000/api/payment-success', {
+                                method: 'POST',
+                                headers: { 
+                                    'Content-Type': 'application/json',
+                                    'Authorization': token 
+                                },
+                                body: JSON.stringify({ 
+                                    order_id: response.razorpay_order_id,
+                                    payment_id: response.razorpay_payment_id 
+                                })
+                            });
+                            
+                            const updateData = await res.json();
+                            if(updateData.success) {
+                                alert("BOMB! 💣 ₹500 Wallet mein add ho gaye!");
+                                window.location.reload(); 
+                            } else {
+                                alert("Error: " + updateData.message);
+                            }
+                            btn.innerText = "+ Wallet Recharge Karo (₹500)";
+                        },
+                        "theme": { "color": "#10b981" }
+                    };
+                    var rzp1 = new Razorpay(options);
+                    rzp1.open();
+                } else {
+                    alert("Gateway error: " + data.message);
+                    btn.innerText = "+ Wallet Recharge Karo (₹500)";
+                }
+            } catch (error) {
+                alert("Server Error!");
+                btn.innerText = "+ Wallet Recharge Karo (₹500)";
+            }
+        };
+    </script>
+</body>
+</html>
