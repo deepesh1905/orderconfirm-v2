@@ -80,13 +80,13 @@ app.post('/webhook', async (req, res) => {
                 console.log(`📥 Naya Message (${senderPhone}):`, msgText);
 
                 if (msgText) {
-                    // 🧠 GROQ AI Dimaag (Now Strictly in Professional English)
+                    // 🧠 GROQ AI Dimaag (Latest Model & Strictly English)
                     const chatCompletion = await groq.chat.completions.create({
                         messages: [
                             { role: "system", content: "You are a smart, professional Order Confirmation assistant. Keep your answers short, polite, and strictly in English." },
                             { role: "user", content: msgText }
                         ],
-                        model: "llama3-8b-8192", 
+                        model: "llama-3.1-8b-instant", // NAYA AUR FAST MODEL YAHAN HAI
                     });
                     
                     let aiResponse = chatCompletion.choices[0].message.content;
