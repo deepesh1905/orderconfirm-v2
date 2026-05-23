@@ -7,12 +7,12 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000; 
 
-// --- MIDDLEWARE (Engine ki settings) ---
+// --- MIDDLEWARE ---
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(__dirname)); 
 
-// --- KEYS & TOKENS (Render se exact match) ---
+// --- KEYS & TOKENS ---
 const VERIFY_TOKEN = "deepesh_secret_token";
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN; 
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID; 
@@ -23,12 +23,11 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_SECRET
 });
 
-// --- ROUTES (Website ke raaste) ---
+// --- ROUTES ---
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.post('/login', (req, res) => res.redirect('/Dashboard.html'));
 app.post('/signup', (req, res) => res.redirect('/Dashboard.html'));
 
-// Razorpay Order Create
 app.post('/create-order', async (req, res) => {
     try {
         const order = await razorpay.orders.create({ amount: 50000, currency: "INR", receipt: "rcpt_1" });
@@ -41,9 +40,7 @@ app.post('/create-order', async (req, res) => {
 app.post('/verify-payment', (req, res) => res.json({ success: true }));
 
 
-// --- 🤖 WHATSAPP + GROQ AI WEBHOOK (The Brain) ---
-
-// 1. Meta Webhook Verification
+// --- 🤖 WHATSAPP + GROQ AI WEBHOOK ---
 app.get('/webhook', (req, res) => {
     let mode = req.query["hub.mode"];
     let token = req.query["hub.verify_token"];
@@ -55,7 +52,6 @@ app.get('/webhook', (req, res) => {
     }
 });
 
-// 2. Incoming WhatsApp Messages & AI Auto-Reply
 app.post('/webhook', async (req, res) => {
     let body = req.body;
     
@@ -65,7 +61,6 @@ app.post('/webhook', async (req, res) => {
             let changes = entry.changes[0];
             let value = changes.value;
             
-            // Agar customer ka naya message aaya hai
             if (value.messages && value.messages[0]) {
                 let message = value.messages[0];
                 let senderPhone = message.from;
@@ -80,18 +75,16 @@ app.post('/webhook', async (req, res) => {
                 console.log(`📥 Naya Message (${senderPhone}):`, msgText);
 
                 if (msgText) {
-                    // 🧠 GROQ AI Dimaag (Latest Model & Strictly English)
                     const chatCompletion = await groq.chat.completions.create({
                         messages: [
                             { role: "system", content: "You are a smart, professional Order Confirmation assistant. Keep your answers short, polite, and strictly in English." },
                             { role: "user", content: msgText }
                         ],
-                        model: "llama-3.1-8b-instant", // NAYA AUR FAST MODEL YAHAN HAI
+                        model: "llama-3.1-8b-instant", 
                     });
                     
                     let aiResponse = chatCompletion.choices[0].message.content;
 
-                    // 📨 WhatsApp par reply wapas bhejna
                     await axios({
                         method: 'POST',
                         url: `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`,
@@ -110,7 +103,13 @@ app.post('/webhook', async (req, res) => {
                 }
             }
         } catch (error) {
-            console.error("❌ Error:", error.message);
+            // 🕵️ DETECTIVE LOGGER
+            console.error("❌ ERROR AAYA HAI!");
+            if (error.response && error.response.data) {
+                console.error("🕵️ Asli Wajah:", JSON.stringify(error.response.data, null, 2));
+            } else {
+                console.error("🕵️ Wajah:", error.message);
+            }
         }
     }
     res.sendStatus(200); 
