@@ -130,17 +130,15 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
 });
 
 // =====================
-// 4. SEND CONFIRMATION
+// 4. SEND CONFIRMATION (OUTBOUND)
 // =====================
 app.post('/api/send-confirmation', async (req, res) => {
   try {
     const { customer_name, total_amount, phone_number, seller_id } = req.body;
 
-    // Seller check karo
     const seller = await Seller.findById(seller_id);
     if (!seller) return res.status(404).json({ message: 'Seller not found' });
 
-    // Free trial ya wallet check
     if (seller.freeTrialUsed < seller.freeTrialLimit) {
       seller.freeTrialUsed += 1;
     } else if (seller.wallet >= 3) {
@@ -152,7 +150,6 @@ app.post('/api/send-confirmation', async (req, res) => {
     seller.totalOrders += 1;
     await seller.save();
 
-    // WhatsApp message bhejo
     await axios.post(
       `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
       {
@@ -179,7 +176,6 @@ app.post('/api/send-confirmation', async (req, res) => {
       }
     );
 
-    // Order save karo
     const order = new Order({
       sellerId: seller_id,
       customerName: customer_name,
@@ -200,7 +196,7 @@ app.post('/api/send-confirmation', async (req, res) => {
 app.post('/api/create-order', authMiddleware, async (req, res) => {
   try {
     const order = await razorpay.orders.create({
-      amount: 50000, // ₹500 in paise
+      amount: 50000, 
       currency: 'INR',
       receipt: 'receipt_' + Date.now()
     });
@@ -241,7 +237,7 @@ app.post('/api/verify-payment', authMiddleware, async (req, res) => {
 });
 
 // =====================
-// 7. WHATSAPP WEBHOOK
+// 7. WHATSAPP WEBHOOK (INBOUND + BUTTON CATCHING)
 // =====================
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
@@ -259,30 +255,51 @@ app.post('/webhook', async (req, res) => {
   try {
     const body = req.body;
     if (body.object === 'whatsapp_business_account') {
-      const message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+      const entry = body.entry?.[0];
+      const message = entry?.changes?.[0]?.value?.messages?.[0];
+
       if (message) {
-        const from = message.from;
-        const text = message.text?.body?.toLowerCase();
-        console.log(`📩 Naya Message (${from}): ${text}`);
-        
-        // Auto reply
-        await axios.post(
-          `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
-          {
-            messaging_product: "whatsapp",
-            to: from,
-            type: "text",
-            text: { 
-              body: "Hello! How can I assist you with your order confirmation? 🛍️" 
-            }
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`
-            }
+        const fromNumber = message.from;
+
+        // 🔘 JAB CUSTOMER TEMPLATE BUTTON DABAYE
+        if (message.type === 'button') {
+          const buttonText = message.button.text;
+          console.log(`🔘 Button Clicked: ${buttonText} by ${fromNumber}`);
+
+          if (buttonText === 'Yes, Dispatch It') {
+            await Order.findOneAndUpdate(
+              { phoneNumber: fromNumber },
+              { status: 'Confirmed' },
+              { sort: { createdAt: -1 } } 
+            );
+            console.log('✅ JADOO! Order Confirmed in Database!');
+          } 
+          else if (buttonText === 'Cancel Order') {
+            await Order.findOneAndUpdate(
+              { phoneNumber: fromNumber },
+              { status: 'Cancelled' },
+              { sort: { createdAt: -1 } }
+            );
+            console.log('❌ ALERT! Order Cancelled in Database!');
           }
-        );
-        console.log('✅ English AI Reply Bhej Diya!');
+        }
+        
+        // 💬 JAB CUSTOMER NORMAL TEXT BHEJE (Jaise "Hii")
+        else if (message.type === 'text') {
+          const text = message.text?.body?.toLowerCase();
+          console.log(`📩 Naya Text Message (${fromNumber}): ${text}`);
+          
+          await axios.post(
+            `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
+            {
+              messaging_product: "whatsapp",
+              to: fromNumber,
+              type: "text",
+              text: { body: "Hello Boss! Aapka order update ho raha hai. 🛍️" }
+            },
+            { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` } }
+          );
+        }
       }
     }
     res.sendStatus(200);
@@ -297,5 +314,5 @@ app.post('/webhook', async (req, res) => {
 // =====================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`BOMB! 🚀 Server running on port ${PORT}`);
+  console.log(`BOMB! 🚀 Master Server running on port ${PORT}`);
 });

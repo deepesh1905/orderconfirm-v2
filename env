@@ -1,0 +1,6 @@
+JWT_SECRET=orderconfirm_secret_123
+MONGODB_URI=mongodb://Deepesh0005:Deepesh19@ac-tqzysyl-shard-00-00.mgmlyjw.mongodb.net:27017,ac-tqzysyl-shard-00-01.mgmlyjw.mongodb.net:27017,ac-tqzysyl-shard-00-02.mgmlyjw.mongodb.net:27017/?ssl=true&replicaSet=atlas-sqdouo-shard-0&authSource=admin&appName=Cluster0
+PHONE_NUMBER_ID=110676383856433
+WHATSAPP_TOKEN=EAAOKe6ONLJQBRttyJZBFBEzq5bu75DxiZCQoJJHHqOg5XtbMIh0BARGkwWZCwp2zadeZBLHN6BhDbS4Rli6v9VHRe9acoZCuNvoMJsHiGeZAYdUqLZAAyxjLdW4eCSZCQY6GJzAXTkS5MXpoExhwNlZChvLIxRHrenX1Aa1PZCDsYC1k2Ybuehhm9laShlpxPWj4tj8QZDZD
+RAZORPAY_KEY_ID=rzp_test_SrIYTrIEZwmY5d
+RAZORPAY_SECRET=57EXYauiYr3Ynx6aaqjWPQo2
