@@ -121,10 +121,11 @@ app.post('/api/send-confirmation', async (req, res) => {
     const seller = await Seller.findById(seller_id);
     if (!seller) return res.status(404).json({ message: 'Seller not found' });
 
+    // 🚀 NEW ₹5 PRICING LOGIC APPLIED HERE!
     if (seller.freeTrialUsed < seller.freeTrialLimit) {
       seller.freeTrialUsed += 1;
-    } else if (seller.wallet >= 3) {
-      seller.wallet -= 3;
+    } else if (seller.wallet >= 5) {
+      seller.wallet -= 5;
     } else {
       return res.status(400).json({ message: 'Wallet empty! Recharge karo' });
     }
@@ -187,7 +188,7 @@ app.post('/api/send-confirmation', async (req, res) => {
       } catch (err) {
         console.log('Timer Execution Error:', err.message);
       }
-    }, liveDelay); // 🚀 1 GHANTA SET HO GAYA!
+    }, liveDelay);
 
     res.json({ success: true, message: 'Template Sent!' });
   } catch (err) {
