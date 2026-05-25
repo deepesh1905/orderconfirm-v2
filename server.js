@@ -1,121 +1,119 @@
 const express = require('express');
-const path = require('path');
-const Razorpay = require('razorpay');
-const Groq = require('groq-sdk');
 const axios = require('axios');
 
 const app = express();
-const PORT = process.env.PORT || 3000; 
-
-// --- MIDDLEWARE ---
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(__dirname)); 
 
-// --- KEYS & TOKENS ---
-const VERIFY_TOKEN = "deepesh_secret_token";
-const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN; 
-const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID; 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY }); 
+// ==========================================
+// 🔴 1. APNI PERMANENT DETAILS YAHAN DAALEIN
+// ==========================================
+const WHATSAPP_TOKEN = 'EAAOKe6ONLJQBRttyJZBFBEzq5bu75DxiZCQoJJHHqOg5XtbMIh0BARGkwWZCwp2zadeZBLHN6BhDbS4Rli6v9VHRe9acoZCuNvoMJsHiGeZAYdUqLZAAyxjLdW4eCSZCQY6GJzAXTkS5MXpoExhwNlZChvLIxRHrenX1Aa1PZCDsYC1k2Ybuehhm9laShlpxPWj4tj8QZDZD';
+const PHONE_NUMBER_ID = '1106763835856433'; 
+const VERIFY_TOKEN = 'mera_secret_token_123'; // Meta Webhook verify karne ke liye
 
-const razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_SECRET
-});
+// ==========================================
+// 🚀 2. OUTBOUND: Naya Order Aane Par Message Bhejna
+// ==========================================
+app.post('/new-order', async (req, res) => {
+    const { customer_name, total_amount, phone_number } = req.body;
 
-// --- ROUTES ---
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-app.post('/login', (req, res) => res.redirect('/Dashboard.html'));
-app.post('/signup', (req, res) => res.redirect('/Dashboard.html'));
+    if (!phone_number || !customer_name || !total_amount) {
+        return res.status(400).send('❌ Order details missing hain!');
+    }
 
-app.post('/create-order', async (req, res) => {
     try {
-        const order = await razorpay.orders.create({ amount: 50000, currency: "INR", receipt: "rcpt_1" });
-        res.json({ key_id: process.env.RAZORPAY_KEY_ID, amount: order.amount, order_id: order.id });
+        await axios({
+            method: 'POST',
+            url: `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`,
+            headers: {
+                'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            data: {
+                messaging_product: 'whatsapp',
+                to: phone_number,
+                type: 'template',
+                template: {
+                    name: 'order_confirm_bot', // Aapka Naya Approved Template
+                    language: { code: 'en_US' },
+                    components: [
+                        {
+                            type: 'body',
+                            parameters: [
+                                { type: 'text', text: customer_name },
+                                { type: 'text', text: total_amount.toString() }
+                            ]
+                        }
+                    ]
+                }
+            }
+        });
+        console.log(`✅ Message successfully sent to: ${phone_number}`);
+        res.status(200).send('Template Sent!');
     } catch (error) {
-        res.status(500).json({ error: "Gateway failed!" });
+        console.error('❌ Error sending message:', error.response ? error.response.data : error.message);
+        res.status(500).send('Error');
     }
 });
 
-app.post('/verify-payment', (req, res) => res.json({ success: true }));
-
-
-// --- 🤖 WHATSAPP + GROQ AI WEBHOOK ---
+// ==========================================
+// 🔐 3. INBOUND: Meta Webhook Verification
+// ==========================================
 app.get('/webhook', (req, res) => {
-    let mode = req.query["hub.mode"];
-    let token = req.query["hub.verify_token"];
-    let challenge = req.query["hub.challenge"];
-    if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+        console.log('✅ Webhook Verified by Meta!');
         res.status(200).send(challenge);
     } else {
         res.sendStatus(403);
     }
 });
 
+// ==========================================
+// 📥 4. INBOUND: Customer Ke Replies Aur Buttons Catch Karna
+// ==========================================
 app.post('/webhook', async (req, res) => {
-    let body = req.body;
-    
+    const body = req.body;
+
     if (body.object === 'whatsapp_business_account') {
-        try {
-            let entry = body.entry[0];
-            let changes = entry.changes[0];
-            let value = changes.value;
-            
-            if (value.messages && value.messages[0]) {
-                let message = value.messages[0];
-                let senderPhone = message.from;
-                let msgText = "";
+        if (body.entry && body.entry[0].changes && body.entry[0].changes[0].value.messages) {
+            const message = body.entry[0].changes[0].value.messages[0];
+            const fromNumber = message.from;
 
-                if (message.type === "text") {
-                    msgText = message.text.body;
-                } else if (message.type === "interactive") {
-                    msgText = message.interactive.button_reply.title;
-                }
+            // Agar customer ne Button (Quick Reply/Custom) dabaya hai
+            if (message.type === 'button') {
+                const buttonText = message.button.text;
 
-                console.log(`📥 Naya Message (${senderPhone}):`, msgText);
-
-                if (msgText) {
-                    const chatCompletion = await groq.chat.completions.create({
-                        messages: [
-                            { role: "system", content: "You are a smart, professional Order Confirmation assistant. Keep your answers short, polite, and strictly in English." },
-                            { role: "user", content: msgText }
-                        ],
-                        model: "llama-3.1-8b-instant", 
-                    });
-                    
-                    let aiResponse = chatCompletion.choices[0].message.content;
-
-                    await axios({
-                        method: 'POST',
-                        url: `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`,
-                        headers: {
-                            Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-                            'Content-Type': 'application/json'
-                        },
-                        data: {
-                            messaging_product: "whatsapp",
-                            to: senderPhone,
-                            type: "text",
-                            text: { body: aiResponse }
-                        }
-                    });
-                    console.log("✅ English AI Reply Bhej Diya!");
+                if (buttonText === '✅ Yes, Dispatch It') {
+                    console.log(`🎉 ORDER CONFIRMED BY: ${fromNumber}`);
+                    // Yahan aap Shopify ko API bhej sakte hain ki order "Confirmed" mark kar do
+                } 
+                else if (buttonText === '❌ Cancel Order') {
+                    console.log(`⚠️ ORDER CANCELLED BY: ${fromNumber}`);
+                    // Yahan aap order ko "Cancelled" mark kar sakte hain
                 }
             }
-        } catch (error) {
-            // 🕵️ DETECTIVE LOGGER
-            console.error("❌ ERROR AAYA HAI!");
-            if (error.response && error.response.data) {
-                console.error("🕵️ Asli Wajah:", JSON.stringify(error.response.data, null, 2));
-            } else {
-                console.error("🕵️ Wajah:", error.message);
+            
+            // Agar customer ne normal text message (Jaise "Hii") bheja hai
+            else if (message.type === 'text') {
+                const textMessage = message.text.body;
+                console.log(`💬 Text from ${fromNumber}: ${textMessage}`);
+                // Yahan aapka Groq AI wala code aayega jo usse baatcheet karega
             }
         }
+        res.sendStatus(200);
+    } else {
+        res.sendStatus(404);
     }
-    res.sendStatus(200); 
 });
 
-// --- ENGINE START ---
+// ==========================================
+// 🌍 5. Server Start Karna
+// ==========================================
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`BOMB! 💣 Server running on port ${PORT} 🚀`);
+    console.log(`🚀 MASTER SERVER IS RUNNING ON PORT ${PORT}`);
 });
