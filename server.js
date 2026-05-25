@@ -74,7 +74,9 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-// SIGNUP & LOGIN ROUTES
+// =====================
+// 1 & 2. SIGNUP & LOGIN ROUTES
+// =====================
 app.post('/api/signup', async (req, res) => {
   try {
     const { name, email, phone, business, password } = req.body;
@@ -110,7 +112,7 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
 });
 
 // =====================
-// 4. SEND CONFIRMATION (OUTBOUND + TIMER START)
+// 4. SEND CONFIRMATION (OUTBOUND + 1 HOUR TIMER)
 // =====================
 app.post('/api/send-confirmation', async (req, res) => {
   try {
@@ -161,35 +163,31 @@ app.post('/api/send-confirmation', async (req, res) => {
     });
     await order.save();
 
-    // ⏱️ TIMER SYSTEM: 10 SECOND TESTING KE LIYE (Live mein isko 1 ghanta karenge)
-    const testDelay = 10 * 1000; // 10 Seconds
-    const liveDelay = 60 * 60 * 1000; // 1 Hour
+    // ⏱️ TIMER SYSTEM: LIVE MODE (1 Ghanta / 60 Minutes)
+    const liveDelay = 60 * 60 * 1000; 
 
-    console.log(`⏱️ Tik-Tik started for ${phone_number}. Waiting for reply...`);
+    console.log(`⏱️ 1-Hour Timer started for ${phone_number}. Waiting for reply...`);
 
     // Agar is number par pehle se koi timer chal raha hai toh use cancel karo
     if (globalTimers[phone_number]) clearTimeout(globalTimers[phone_number]);
 
+    // Timer Start (Hit after 1 Hour)
     globalTimers[phone_number] = setTimeout(async () => {
       try {
-        // 10 second baad check karo ki kya status abhi bhi 'sent' hai?
         const checkOrder = await Order.findById(order._id);
         if (checkOrder && checkOrder.status === 'sent') {
-          console.log(`🚨 TIMER HIT! Customer ${phone_number} ignored WhatsApp. Triggering Call!`);
+          console.log(`🚨 1 HOUR CROSSED! Customer ${phone_number} ignored WhatsApp. Triggering Call!`);
           
-          // Database mein Status 'Called' mark karo
           checkOrder.status = 'Called';
           await checkOrder.save();
 
           // 📞 API CALLING LOGIC (MSG91 / Exotel Integration yahan hit hoga)
           console.log(`📞 [FAKE CALL API] Calling to ${phone_number}: "Press 1 to Confirm your order of Rs.${total_amount}"`);
-          
-          // Jab MSG91 account mil jayega, toh axios.post() ka asli hit yahan lagega.
         }
       } catch (err) {
         console.log('Timer Execution Error:', err.message);
       }
-    }, testDelay); // Abhi test karne ke liye sirf 10 second set kiya hai!
+    }, liveDelay); // 🚀 1 GHANTA SET HO GAYA!
 
     res.json({ success: true, message: 'Template Sent!' });
   } catch (err) {
@@ -197,7 +195,9 @@ app.post('/api/send-confirmation', async (req, res) => {
   }
 });
 
-// RAZORPAY ROUTES
+// =====================
+// 5 & 6. RAZORPAY ROUTES
+// =====================
 app.post('/api/create-order', authMiddleware, async (req, res) => {
   try {
     const order = await razorpay.orders.create({ amount: 50000, currency: 'INR', receipt: 'receipt_' + Date.now() });
@@ -247,7 +247,7 @@ app.post('/webhook', async (req, res) => {
           if (globalTimers[fromNumber]) {
             clearTimeout(globalTimers[fromNumber]);
             delete globalTimers[fromNumber];
-            console.log(`🎯 TIMER KILLED for ${fromNumber}! No Call will be sent.`);
+            console.log(`🎯 1-HOUR TIMER KILLED for ${fromNumber}! No Call will be sent.`);
           }
 
           if (buttonText === 'Yes, Dispatch It') {
